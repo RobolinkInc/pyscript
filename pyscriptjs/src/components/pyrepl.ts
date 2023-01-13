@@ -151,7 +151,10 @@ export function make_PyRepl(runtime: Runtime) {
          *  display() the last evaluated expression
          */
         execute(): void {
+            logger.info('12:32')
+
             const pySrc = this.getPySrc();
+            logger.info(pySrc);
 
             // determine the output element
             const outEl = this.getOutputElement();
@@ -176,8 +179,59 @@ export function make_PyRepl(runtime: Runtime) {
             this.autogenerateMaybe();
         }
 
+        getPrefix(line: string): boolean {
+            return line.replaceAll(/\s/g, '').slice(-1) === ")" ? true : false;
+        }
+
+        formatPySrc(source: string): string {
+            source = source.split('\n').map(line => {
+                let newLine = line;
+                let indentation = line.match(/^[ \t]+/g) ? line.match(/^[ \t]+/g)[0] : ''
+                indentation += '    ';
+                if (line.includes('Drone()')) {
+                    globalThis.droneInstance = line.split("=")[0].replaceAll(" ", "") + ".";
+                    newLine = "\n";
+                } else if (line.includes(globalThis.droneInstance)) {
+                    let splitLineByDrone = line.split('drone.');
+                    newLine = splitLineByDrone.map((s, i) => {
+                        if (i === 0) return s;
+                        else if (s.includes('get_color_data')) {
+                            // JSProxy to Python array
+                            logger.info('including color data');
+                            let value_name = line.split('=')[0].replaceAll(' ', '');
+                            return `
+tmp = await drone.${s}
+${value_name} = tmp.to_py()
+`
+                        } else {
+                            return `await drone.${s}`
+                        }
+                    }).join("");
+                    if (newLine.includes('get_color_data')) {
+                        let value_name = line.split('=')[0].replaceAll(' ', '');
+                        newLine = newLine.replace(`${value_name} = \n`, '')
+                    }
+                } else if (line.includes('time.sleep')) {
+                    // let indentation = line.match(/^[ \t]+/g) ? line.match(/^[ \t]+/g)[0] : ''
+                    let seconds = line.split('(')[1].split(')')[0];
+                    newLine = `${indentation}await asyncio.sleep(${seconds})`;
+                } else if (line.includes('from codrone_edu') || line.includes('import codrone_edu')) {
+                    newLine = '\n';
+                } else {
+                    newLine = line;
+                }
+                return `${this.getPrefix(newLine) ? `${indentation}await drone.checkInterruption()\n`: ''}${indentation}${newLine}`;
+            }).join('\n');
+
+            return `import asyncio\nfrom cde import drone\nimport Note\n\nasync def main():\n${source}\n    await drone.stop_execution()\n\nasyncio.ensure_future(main())`
+
+            // return 'import asyncio\nfrom cde import drone\nimport Note\n\n' + source + '\nawait drone.stop_execution()';
+
+        }
+
         getPySrc(): string {
-            return this.editor.state.doc.toString();
+            let source = this.editor.state.doc.toString();
+            return this.formatPySrc(source);
         }
 
         getOutputElement(): HTMLElement {
