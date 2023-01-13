@@ -151,7 +151,7 @@ export function make_PyRepl(runtime: Runtime) {
          *  display() the last evaluated expression
          */
         execute(): void {
-            logger.info('12:32')
+            logger.info('14:14')
 
             const pySrc = this.getPySrc();
             logger.info(pySrc);
@@ -185,13 +185,15 @@ export function make_PyRepl(runtime: Runtime) {
 
         formatPySrc(source: string): string {
             source = source.split('\n').map(line => {
+                logger.info('line : ' + line)
                 let newLine = line;
                 let indentation = line.match(/^[ \t]+/g) ? line.match(/^[ \t]+/g)[0] : ''
                 indentation += '    ';
                 if (line.includes('Drone()')) {
                     globalThis.droneInstance = line.split("=")[0].replaceAll(" ", "") + ".";
                     newLine = "\n";
-                } else if (line.includes(globalThis.droneInstance)) {
+                    logger.info('if include Drone()')
+                } else if (line.includes('drone.')) {
                     let splitLineByDrone = line.split('drone.');
                     newLine = splitLineByDrone.map((s, i) => {
                         if (i === 0) return s;
@@ -207,20 +209,27 @@ ${value_name} = tmp.to_py()
                             return `await drone.${s}`
                         }
                     }).join("");
+                    logger.info('new line in drone function : ')
+                    logger.info(newLine);
                     if (newLine.includes('get_color_data')) {
                         let value_name = line.split('=')[0].replaceAll(' ', '');
                         newLine = newLine.replace(`${value_name} = \n`, '')
                     }
+                    newLine = '    ' + newLine;
+                    logger.info('line includes drone.')
                 } else if (line.includes('time.sleep')) {
                     // let indentation = line.match(/^[ \t]+/g) ? line.match(/^[ \t]+/g)[0] : ''
                     let seconds = line.split('(')[1].split(')')[0];
                     newLine = `${indentation}await asyncio.sleep(${seconds})`;
+                    logger.info('line includes time.sleep')
                 } else if (line.includes('from codrone_edu') || line.includes('import codrone_edu')) {
                     newLine = '\n';
+                    logger.info('line includes libraries')
                 } else {
-                    newLine = line;
+                    newLine = '    ' + line;
+                    logger.info('line does not include anything')
                 }
-                return `${this.getPrefix(newLine) ? `${indentation}await drone.checkInterruption()\n`: ''}${indentation}${newLine}`;
+                return `${this.getPrefix(newLine) ? `${indentation}await drone.checkInterruption()\n`: ''}${newLine}`;
             }).join('\n');
 
             return `import asyncio\nfrom cde import drone\nimport Note\n\nasync def main():\n${source}\n    await drone.stop_execution()\n\nasyncio.ensure_future(main())`
