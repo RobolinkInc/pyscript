@@ -151,7 +151,7 @@ export function make_PyRepl(runtime: Runtime) {
          *  display() the last evaluated expression
          */
         execute(): void {
-            logger.info('14:14')
+            logger.info('11:35')
 
             const pySrc = this.getPySrc();
             logger.info(pySrc);
@@ -183,7 +183,16 @@ export function make_PyRepl(runtime: Runtime) {
             return line.replaceAll(/\s/g, '').slice(-1) === ")" ? true : false;
         }
 
+        isFuncExecution(line: string): boolean {
+            if (line.indexOf("(") !== -1 && line.indexOf(")") !== -1 && line.indexOf("drone.") === -1) {
+                return true;
+            }
+            return false;
+        }
+
         formatPySrc(source: string): string {
+            let customFuncs = [];
+
             source = source.split('\n').map(line => {
                 logger.info('line : ' + line)
                 let newLine = line;
@@ -225,6 +234,23 @@ ${value_name} = tmp.to_py()
                 } else if (line.includes('from codrone_edu') || line.includes('import codrone_edu')) {
                     newLine = '\n';
                     logger.info('line includes libraries')
+                } else if (line.includes('def ')) {
+                    newLine = '    async ' + line;
+                    try {
+                        let myFunc = line.split("def ")[1].split("(")[0]
+                        customFuncs.push(myFunc)
+                        logger.info('Updated customFuncs : ' + myFunc)
+                    } catch {
+                        console.log('error')
+                    }
+                } else if (customFuncs.length > 0 && this.isFuncExecution(line)) {
+                    let myFunc = line.split("(")[0];
+                    logger.info('myFunc : ' + myFunc)
+                    if (customFuncs.includes(myFunc)) {
+                        newLine = '    asyncio.ensure_future(' + line + ')';
+                    } else {
+                        newLine = '    ' + line; // Error!
+                    }
                 } else {
                     newLine = '    ' + line;
                     logger.info('line does not include anything')
