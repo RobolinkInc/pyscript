@@ -151,7 +151,10 @@ export function make_PyRepl(runtime: Runtime) {
          *  display() the last evaluated expression
          */
         execute(): void {
+            logger.info('11:35')
+
             const pySrc = this.getPySrc();
+            logger.info(pySrc);
 
             // determine the output element
             const outEl = this.getOutputElement();
@@ -176,8 +179,94 @@ export function make_PyRepl(runtime: Runtime) {
             this.autogenerateMaybe();
         }
 
+        getPrefix(line: string): boolean {
+            return line.replaceAll(/\s/g, '').slice(-1) === ")" ? true : false;
+        }
+
+        isFuncExecution(line: string): boolean {
+            if (line.indexOf("(") !== -1 && line.indexOf(")") !== -1 && line.indexOf("drone.") === -1) {
+                return true;
+            }
+            return false;
+        }
+
+        formatPySrc(source: string): string {
+            let customFuncs = [];
+
+            source = source.split('\n').map(line => {
+                logger.info('line : ' + line)
+                let newLine = line;
+                let indentation = line.match(/^[ \t]+/g) ? line.match(/^[ \t]+/g)[0] : ''
+                indentation += '    ';
+                if (line.includes('Drone()')) {
+                    globalThis.droneInstance = line.split("=")[0].replaceAll(" ", "") + ".";
+                    newLine = "\n";
+                    logger.info('if include Drone()')
+                } else if (line.includes('drone.')) {
+                    let splitLineByDrone = line.split('drone.');
+                    newLine = splitLineByDrone.map((s, i) => {
+                        if (i === 0) return s;
+                        else if (s.includes('get_color_data')) {
+                            // JSProxy to Python array
+                            logger.info('including color data');
+                            let value_name = line.split('=')[0].replaceAll(' ', '');
+                            return `
+tmp = await drone.${s}
+${value_name} = tmp.to_py()
+`
+                        } else {
+                            return `await drone.${s}`
+                        }
+                    }).join("");
+                    logger.info('new line in drone function : ')
+                    logger.info(newLine);
+                    if (newLine.includes('get_color_data')) {
+                        let value_name = line.split('=')[0].replaceAll(' ', '');
+                        newLine = newLine.replace(`${value_name} = \n`, '')
+                    }
+                    newLine = '    ' + newLine;
+                    logger.info('line includes drone.')
+                } else if (line.includes('time.sleep')) {
+                    // let indentation = line.match(/^[ \t]+/g) ? line.match(/^[ \t]+/g)[0] : ''
+                    let seconds = line.split('(')[1].split(')')[0];
+                    newLine = `${indentation}await asyncio.sleep(${seconds})`;
+                    logger.info('line includes time.sleep')
+                } else if (line.includes('from codrone_edu') || line.includes('import codrone_edu')) {
+                    newLine = '\n';
+                    logger.info('line includes libraries')
+                } else if (line.includes('def ')) {
+                    newLine = '    async ' + line;
+                    try {
+                        let myFunc = line.split("def ")[1].split("(")[0]
+                        customFuncs.push(myFunc)
+                        logger.info('Updated customFuncs : ' + myFunc)
+                    } catch {
+                        console.log('error')
+                    }
+                } else if (customFuncs.length > 0 && this.isFuncExecution(line)) {
+                    let myFunc = line.split("(")[0];
+                    logger.info('myFunc : ' + myFunc)
+                    if (customFuncs.includes(myFunc)) {
+                        newLine = '    asyncio.ensure_future(' + line + ')';
+                    } else {
+                        newLine = '    ' + line; // Error!
+                    }
+                } else {
+                    newLine = '    ' + line;
+                    logger.info('line does not include anything')
+                }
+                return `${this.getPrefix(newLine) ? `${indentation}await drone.checkInterruption()\n`: ''}${newLine}`;
+            }).join('\n');
+
+            return `import asyncio\nfrom cde import drone\nimport Note\n\nasync def main():\n${source}\n    await drone.stop_execution()\n\nasyncio.ensure_future(main())`
+
+            // return 'import asyncio\nfrom cde import drone\nimport Note\n\n' + source + '\nawait drone.stop_execution()';
+
+        }
+
         getPySrc(): string {
-            return this.editor.state.doc.toString();
+            let source = this.editor.state.doc.toString();
+            return this.formatPySrc(source);
         }
 
         getOutputElement(): HTMLElement {

@@ -72,6 +72,10 @@ export class PyodideRuntime extends Runtime {
             logger.info("Found packages in configuration to install. Loading micropip...")
             await this.loadPackage('micropip');
         }
+
+        this.registerJsModule("cde", window.Code);
+        this.registerJsModule("Note", window.Note);
+
         logger.info('pyodide loaded and initialized');
     }
 

@@ -15,6 +15,7 @@
     "forceConsistentCasingInFileNames": true,
     "lib": [
       "es2017",
+      "ES2021.String",
       "dom",
       "DOM.Iterable"
     ]

@@ -30,6 +30,7 @@ export function pyExec(runtime: Runtime, pysrc: string, outElem: HTMLElement) {
             // e.g. allowing plugins to intercept exceptions and display them
             // in a configurable way.
             displayPyException(err, outElem);
+            runtime.run('import asyncio\nfrom cde import drone\nasync def stop():\n    await drone.stop_execution()\nasyncio.ensure_future(stop())');
         }
     } finally {
         pyscript_py.set_current_display_target(undefined);
